@@ -10,7 +10,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      # 1. Checkout
+      # 1. Checkout del código
       - name: Checkout code
         uses: actions/checkout@v3
 
@@ -18,25 +18,55 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      # 3. Build
+      # 3. Build del proyecto con variable de entorno
       - name: Build project
         run: npm run build
+        env:
+          VITE_BACKEND_URL: "https://backend-evaluasaurio.singularitymx.org"
 
-      # 4. Preparar archivos para despliegue (solo contenido de dist/)
-      - name: Prepare deployment folder
-        run: |
-          mkdir upload
-          cp -r dist/* upload/
+      # 4. Limpiar carpeta app en el servidor
+      - name: Clean app folder on server
+        uses: appleboy/ssh-action@v0.1.7
+        with:
+          host: ${{ secrets.FTP_HOST }}
+          port: 65002
+          username: ${{ secrets.FTP_USERNAME }}
+          password: ${{ secrets.FTP_PASSWORD }}
+          script: |
+            rm -rf /home/u326980243/domains/singularitymx.org/public_html/subproyectos/evaluasaurio/app
 
-      # 5. Deploy via SCP (solo contenido)
-      - name: Deploy Evaluasaurio App
+      # 5. Subir carpeta dist al servidor
+      - name: Upload dist folder
         uses: appleboy/scp-action@v0.1.7
         with:
           host: ${{ secrets.FTP_HOST }}
           port: 65002
           username: ${{ secrets.FTP_USERNAME }}
           password: ${{ secrets.FTP_PASSWORD }}
-          source: "upload/*"   # 👈 ahora sí, solo los archivos finales
-          target: "/home/u326980243/domains/singularitymx.org/public_html/subproyectos/evaluasaurio/app/"
+          source: "dist"
+          target: "/home/u326980243/domains/singularitymx.org/public_html/subproyectos/evaluasaurio/"
+          rm: false
           overwrite: true
-          rm: true
+
+      # 6. Renombrar dist a app y crear .htaccess dentro de app
+      - name: Rename dist to app and create .htaccess
+        uses: appleboy/ssh-action@v0.1.7
+        with:
+          host: ${{ secrets.FTP_HOST }}
+          port: 65002
+          username: ${{ secrets.FTP_USERNAME }}
+          password: ${{ secrets.FTP_PASSWORD }}
+          script: |
+            mv /home/u326980243/domains/singularitymx.org/public_html/subproyectos/evaluasaurio/dist \
+               /home/u326980243/domains/singularitymx.org/public_html/subproyectos/evaluasaurio/app
+            # Crear .htaccess dentro de app
+            echo "<IfModule mod_rewrite.c>" > /home/u326980243/domains/singularitymx.org/public_html/subproyectos/evaluasaurio/app/.htaccess
+            echo "  RewriteEngine On" >> /home/u326980243/domains/singularitymx.org/public_html/subproyectos/evaluasaurio/app/.htaccess
+            echo "  RewriteBase /" >> /home/u326980243/domains/singularitymx.org/public_html/subproyectos/evaluasaurio/app/.htaccess
+            echo "" >> /home/u326980243/domains/singularitymx.org/public_html/subproyectos/evaluasaurio/app/.htaccess
+            echo "  # Redirigir todas las rutas a index.html" >> /home/u326980243/domains/singularitymx.org/public_html/subproyectos/evaluasaurio/app/.htaccess
+            echo "  RewriteRule ^index\\.html$ - [L]" >> /home/u326980243/domains/singularitymx.org/public_html/subproyectos/evaluasaurio/app/.htaccess
+            echo "  RewriteCond %{REQUEST_FILENAME} !-f" >> /home/u326980243/domains/singularitymx.org/public_html/subproyectos/evaluasaurio/app/.htaccess
+            echo "  RewriteCond %{REQUEST_FILENAME} !-d" >> /home/u326980243/domains/singularitymx.org/public_html/subproyectos/evaluasaurio/app/.htaccess
+            echo "  RewriteRule . /index.html [L]" >> /home/u326980243/domains/singularitymx.org/public_html/subproyectos/evaluasaurio/app/.htaccess
+            echo "</IfModule>" >> /home/u326980243/domains/singularitymx.org/public_html/subproyectos/evaluasaurio/app/.htaccess
